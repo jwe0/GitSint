@@ -12,6 +12,10 @@ class Scrape:
         self.longest_name = 0
         self.longest_desc = 0
 
+    def Make_Downloads(self):
+        if not os.path.exists("/Downloads"):
+            os.mkdir("Downloads")
+
     def Verify_User(self):
         response = self.session.get("https://github.com/{}".format(self.user))
 
@@ -184,6 +188,7 @@ class Main:
     def Main():
         user = input("Username: ")
         scrape = Scrape(user)
+        scrape.Make_Downloads()
 
         scrape.Start_Scrape()
 
