@@ -13,7 +13,7 @@ class Scrape:
         self.longest_desc = 0
 
     def Make_Downloads(self):
-        if not os.path.exists("/Downloads"):
+        if not os.path.exists("Downloads/"):
             os.mkdir("Downloads")
 
     def Verify_User(self):
@@ -28,7 +28,7 @@ class Scrape:
 
         response = self.session.get(url)
         if response.status_code == 200:
-            return (True, "Read me file exists auto downloaded to Downloads/{folder}/{name}.md".format(name=self.user, folder=self.user), response.text)
+            return (True, "Read me file exists auto downloaded to Downloads/{folder}/{name}.md".format(name=self.user, folder=self.user), response.content)
         return (False, "No Readme", None)
     
     def Is_gitsite(self):
@@ -69,7 +69,7 @@ class Scrape:
         if readme[0]:
             if not os.path.exists("Downloads/{}".format(self.user)):
                 os.mkdir("Downloads/{}".format(self.user))
-            with open("Downloads/{folder}/{name}.md".format(name=self.user, folder=self.user), 'w') as f:
+            with open("Downloads/{folder}/{name}.md".format(name=self.user, folder=self.user), 'wb') as f:
                 f.write(readme[2])
 
         if site[0]:
@@ -103,7 +103,14 @@ class Scrape:
         return BeautifulSoup(self.html, 'html.parser').find('div', class_='p-note user-profile-bio mb-3 js-user-profile-bio f4').get('data-bio-text') if BeautifulSoup(self.html, 'html.parser').find('div', class_='p-note user-profile-bio mb-3 js-user-profile-bio f4') else "No Bio"
     
     def Links(self):
-        return BeautifulSoup(self.html, 'html.parser').find('a', class_="Link--primary").get('href') if BeautifulSoup(self.html, 'html.parser').find('a', class_="Link--primary") else "No links"
+        profile_links = []
+        links = BeautifulSoup(self.html, 'html.parser').find_all('a', class_="Link--primary")
+        
+        for link in links:
+            if "https" in link.get('href'):
+                profile_links.append(link.get('href'))
+
+        return ", ".join(profile_links)
 
     def Locations(self):
         return BeautifulSoup(self.html, 'html.parser').find('li', class_='vcard-detail pt-1 hide-sm hide-md', itemprop='homeLocation').get('aria-label').replace("Home location: ", "") if BeautifulSoup(self.html, 'html.parser').find('li', class_='vcard-detail pt-1 hide-sm hide-md', itemprop='homeLocation') else "No location"
