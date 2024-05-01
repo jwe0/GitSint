@@ -1,20 +1,101 @@
-import tls_client, os
+import tls_client, os, json, threading, logging
 from bs4 import BeautifulSoup
+from flaskwebgui import FlaskUI
+from flask import Flask, request, jsonify, render_template
+
+logging.basicConfig(level=logging.ERROR)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+
+
+class Server:
+    def __init__(self) -> None:
+        self.flask = Flask(__name__)
+        self.ui = FlaskUI(app=self.flask, server="flask", height=500, width=900)
+
+        @self.flask.route('/', methods=['GET'])
+        def index():
+            return render_template('index.html')
+        
+
+        @self.flask.route('/get', methods=['POST'])
+        def get():
+            information = []
+
+            # Sets up the scrape object
+
+            request_json = request.get_json()
+            scrape = Scrape(request_json['username'], "Scrape")
+            scrape.Scrape_Page()
+
+            # Get the basic info
+
+            information.append(scrape.Name())
+            information.append(scrape.Bio())
+            information.append(scrape.Locations())
+            information.append(scrape.Links())
+            information.append(scrape.Status())
+            information.append(scrape.Organizations())
+
+            # Get repo info
+
+            repos = scrape.Repositories()
+
+            # Get followers
+
+            followers = scrape.Followers()
+
+
+
+            return jsonify({"Info" : (information, repos, followers)})
+
+
+    def Start_Server(self):
+        self.flask.run(debug=False)
+
+    def Start_UI(self):
+        self.ui.run()
+
+
+
+
+
+
+class General:
+    def Load_Config():
+        with open("Assets/config.json", 'r') as config:
+            config = json.load(config)
+
+            webui = config['Web UI']
+
+        return webui
+
+
+
+
+
+
 
 
 
 class Scrape:
-    def __init__(self, username) -> None:
+    def __init__(self, username, mode=None) -> None:
         self.session = tls_client.Session()
         self.user = username
         self.html = ""
         self.repositoies = []
         self.longest_name = 0
         self.longest_desc = 0
+        self.mode = mode
 
     def Make_Downloads(self):
         if not os.path.exists("Downloads/"):
             os.mkdir("Downloads")
+
+    def Make_Assets(self):
+        if not os.path.exists("Assets/"):
+            os.mkdir("Assets")
 
     def Verify_User(self):
         response = self.session.get("https://github.com/{}".format(self.user))
@@ -43,14 +124,18 @@ class Scrape:
         else:
             return (False, "No git site found", "", "")
 
+    def Scrape_Page(self):
+        page = self.session.get("https://github.com/{}".format(self.user)).text
+        self.html = page
+
 
 
     def Start_Scrape(self):
         if not self.Verify_User():
             print("User not found")
             exit()
-        page = self.session.get("https://github.com/{}".format(self.user)).text
-        self.html = page
+        self.Scrape_Page()
+
 
 
         
@@ -121,6 +206,8 @@ class Scrape:
     def Repositories(self):
         content = self.session.get("https://github.com/{}?tab=repositories".format(self.user)).text
 
+        repos = []
+
         hrefs = []
         names = []
         descriptions = []
@@ -137,18 +224,25 @@ class Scrape:
 
             description = repositry.find('p', itemprop="description")
 
-            descriptions.append(description.get_text(strip=True)[:20] + "..."  if description else "No description found")
+            descriptions.append(description.get_text(strip=True) if description else "No description found")
 
         self.longest_name = max(len(name) for name in names)
         self.longest_desc = max(len(desc) for desc in descriptions)
         self.repositoies = names.copy()
 
         
-        print("\n > Repositories\n")
+
+        if not self.mode:
+            print("\n > Repositories\n")
         for i in range(len(names)):
+            
 
             name = names[i]
             description = descriptions[i]
+
+            repos.append((name, description, hrefs[i]))
+
+            description = description[:20] + "..."
 
             while len(name) < self.longest_name:
                 name += " "
@@ -156,7 +250,11 @@ class Scrape:
             while len (description) < self.longest_desc:
                 description += " "
 
-            print(f"{name}\t\t{description}\t\t{hrefs[i]}")
+            if not self.mode:
+            
+                print(f"{name}\t\t{description}\t\t{hrefs[i]}")
+        if self.mode:
+            return repos
                 
 
 
@@ -178,10 +276,15 @@ class Scrape:
                 followers_u = follower_span.get_text(strip=True)
                 followers.append(followers_u)
 
+        if self.mode:
+                return followers
+
+
         print("\n > Followers\n")
 
         for follower in followers:
             print("{count}. {follower}".format(count=followers.index(follower) + 1, follower=follower))
+
 
 
 
@@ -200,4 +303,11 @@ class Main:
         scrape.Start_Scrape()
 
 if __name__ == "__main__":
-    Main.Main()
+    webui = General.Load_Config()
+    if webui:
+        server = Server()
+        threading.Thread(target=server.Start_Server).start()
+        threading.Thread(target=server.Start_UI).start()
+    else:
+
+        Main.Main()
